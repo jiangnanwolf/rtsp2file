@@ -1,1 +1,1 @@
-# rtsp2file
+g++ main.cpp  rtsp.cpp -L/usr/local/lib -lavdevice -lxcb -lasound -lSDL2 -lsndio -lXv -lXext -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lm -lavfilter -lm -lm -lpostproc -lm -lavformat -lm -lm -lm -lm -lavcodec -lm -llzma -lx264 -lx265 -lz -lm -lswresample -lm -lswscale -lavutil -pthread -lm -latomic -lX11 -g  -o remux
