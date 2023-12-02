@@ -1,6 +1,7 @@
-#include "rtsp.h"
 #include <queue> // std::priority_queue
 #include <opencv2/opencv.hpp>
+#include "rtsp.h"
+#include "util.h"
 
 static string ts2str(int64_t ts)
 {
@@ -184,21 +185,6 @@ void Rtsp2File::deinit()
     if (ret < 0 && ret != AVERROR_EOF) {
         cerr << "Error occurred: " << err2str(ret);
     }
-}
-
-cv::Mat avframeToCvmat(const AVFrame *frame) {
-  int width = frame->width;
-  int height = frame->height;
-  cv::Mat image(height, width, CV_8UC3);
-  int cvLinesizes[1];
-  cvLinesizes[0] = image.step1();
-  SwsContext *conversion = sws_getContext(
-      width, height, (AVPixelFormat)frame->format, width, height,
-      AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-  sws_scale(conversion, frame->data, frame->linesize, 0, height, &image.data,
-            cvLinesizes);
-  sws_freeContext(conversion);
-  return image;
 }
 
 void Rtsp2File::run()
