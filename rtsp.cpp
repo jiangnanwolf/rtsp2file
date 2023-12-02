@@ -252,6 +252,7 @@ void Rtsp2File::run()
             }else{
                 cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
             }
+            av_frame_free(&frame);
         }
 
         
