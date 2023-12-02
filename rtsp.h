@@ -12,6 +12,7 @@ extern "C"
 
 #include <string>
 #include <iostream>
+#include <vector>
 using namespace std;
 
 class Rtsp2File
@@ -25,10 +26,13 @@ class Rtsp2File
   int ret = 0;
   int stream_index = 0;
   int *stream_mapping = nullptr;
-  int m_stream_mapping_size = 0;
+  int m_nb_streams = 0;
   int m_video_stream_index = -1;
   int m_audio_stream_index = -1;
-  AVCodecContext *video_dec_ctx = nullptr, *audio_dec_ctx = nullptr;
+  vector<AVStream*> m_out_streams;
+  vector<AVStream*> m_in_streams;
+  vector<AVCodec*> m_decoders;
+  vector<AVCodecContext*> m_dec_ctxs;
 
   void init();
   void deinit();

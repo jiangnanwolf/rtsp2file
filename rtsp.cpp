@@ -74,8 +74,11 @@ void Rtsp2File::init()
         return;
     }
 
-    m_stream_mapping_size = ifmt_ctx->nb_streams;
-    stream_mapping = (int*)av_calloc(m_stream_mapping_size, sizeof(*stream_mapping));
+    m_nb_streams = ifmt_ctx->nb_streams;
+    m_in_streams.resize(m_nb_streams);
+    m_out_streams.resize(m_nb_streams);
+
+    stream_mapping = (int*)av_calloc(m_nb_streams, sizeof(*stream_mapping));
     if (!stream_mapping) {
         ret = AVERROR(ENOMEM);
         return;
@@ -84,9 +87,8 @@ void Rtsp2File::init()
     ofmt = ofmt_ctx->oformat;
         // Find video stream
     for (int i = 0; i < ifmt_ctx->nb_streams; i++) {
-        AVStream *out_stream;
-        AVStream *in_stream = ifmt_ctx->streams[i];
-        AVCodecParameters *in_codecpar = in_stream->codecpar;
+        m_in_streams[i] = ifmt_ctx->streams[i];
+        AVCodecParameters *in_codecpar = m_in_streams[i]->codecpar;
 
         if (in_codecpar->codec_type != AVMEDIA_TYPE_AUDIO &&
             in_codecpar->codec_type != AVMEDIA_TYPE_VIDEO &&
@@ -103,19 +105,46 @@ void Rtsp2File::init()
 
         stream_mapping[i] = stream_index++;
 
-        out_stream = avformat_new_stream(ofmt_ctx, NULL);
-        if (!out_stream) {
+        m_out_streams[i] = avformat_new_stream(ofmt_ctx, NULL);
+        if (!m_out_streams[i]) {
             cerr << "Failed allocating output stream" << endl;
             ret = AVERROR_UNKNOWN;
             return;
         }
 
-        ret = avcodec_parameters_copy(out_stream->codecpar, in_codecpar);
+        ret = avcodec_parameters_copy(m_out_streams[i]->codecpar, in_codecpar);
         if (ret < 0) {
             cerr << "Failed to copy codec parameters" << endl;
             return;
         }
-        out_stream->codecpar->codec_tag = 0;
+        m_out_streams[i]->codecpar->codec_tag = 0;
+
+
+        // Find the decoder for the stream
+        const AVCodec* decoder = avcodec_find_decoder(m_in_streams[i]->codecpar->codec_id);
+        if (!decoder) {
+            fprintf(stderr, "No decoder found for codec_id\n");
+            // Handle error
+        }
+
+        // Allocate a new decoding context
+        m_dec_ctxs[i] = avcodec_alloc_context3(decoder);
+        if (!m_dec_ctxs[i]) {
+            fprintf(stderr, "Could not allocate decoding context\n");
+            // Handle error
+        }
+
+        // Copy the codec parameters from the input stream to the new decoding context
+        if (avcodec_parameters_to_context(m_dec_ctxs[i], m_in_streams[i]->codecpar) < 0) {
+            fprintf(stderr, "Could not copy parameters to context\n");
+            // Handle error
+        }
+
+        // Open the codec
+        if (avcodec_open2(m_dec_ctxs[i], decoder, NULL) < 0) {
+            fprintf(stderr, "Could not open codec\n");
+            // Handle error
+        }
     }
     av_dump_format(ofmt_ctx, 0, fileName.c_str(), 1);
 
@@ -160,12 +189,12 @@ void Rtsp2File::run()
     auto compare = [](AVPacket* a, AVPacket* b) {
         return a->dts > b->dts;
     };
-    vector<priority_queue<AVPacket*, vector<AVPacket*>, decltype(compare)>> buffer(m_stream_mapping_size, priority_queue<AVPacket*, std::vector<AVPacket*>, decltype(compare)>(compare));
+    vector<priority_queue<AVPacket*, vector<AVPacket*>, decltype(compare)>> buffer(m_nb_streams, priority_queue<AVPacket*, std::vector<AVPacket*>, decltype(compare)>(compare));
 
     // Define the window size
     size_t window_size = 3;  // Adjust this value as needed
     AVFrame *frame = NULL;
-    vector<int64_t> last_dts(m_stream_mapping_size,INT64_MIN);
+    vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
     while (1) {
         AVStream *in_stream, *out_stream;
 
@@ -174,7 +203,7 @@ void Rtsp2File::run()
             break;
         // log_packet(ifmt_ctx, pkt, "in");
         in_stream  = ifmt_ctx->streams[pkt->stream_index];
-        if (pkt->stream_index >= m_stream_mapping_size ||
+        if (pkt->stream_index >= m_nb_streams ||
             stream_mapping[pkt->stream_index] < 0) {
             av_packet_unref(pkt);
             continue;
@@ -198,7 +227,20 @@ void Rtsp2File::run()
         av_packet_rescale_ts(pkt, in_stream->time_base, out_stream->time_base);
         pkt->pos = -1;
         // log_packet(ofmt_ctx, pkt, "out");
+        
+        // Send the packet to the decoder
+        if (avcodec_send_packet(m_dec_ctxs[pkt->stream_index], pkt) < 0) {
+            fprintf(stderr, "Error sending packet to decoder\n");
+            // Handle error
+        }
 
+        // Receive the decoded frame from the decoder
+        AVFrame* frame = av_frame_alloc();
+        if (avcodec_receive_frame(m_dec_ctxs[pkt->stream_index], frame) < 0) {
+            fprintf(stderr, "Error receiving frame from decoder\n");
+            // Handle error
+        }
+        
         ret = av_interleaved_write_frame(ofmt_ctx, pkt);
         /* pkt is now blank (av_interleaved_write_frame() takes ownership of
          * its contents and resets pkt), so that no unreferencing is necessary.
