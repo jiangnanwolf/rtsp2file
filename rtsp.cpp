@@ -1,5 +1,6 @@
 #include "rtsp.h"
 #include <queue> // std::priority_queue
+#include <opencv2/opencv.hpp>
 
 static string ts2str(int64_t ts)
 {
@@ -77,6 +78,8 @@ void Rtsp2File::init()
     m_nb_streams = ifmt_ctx->nb_streams;
     m_in_streams.resize(m_nb_streams);
     m_out_streams.resize(m_nb_streams);
+    m_dec_ctxs.resize(m_nb_streams);
+    m_decoders.resize(m_nb_streams);
 
     stream_mapping = (int*)av_calloc(m_nb_streams, sizeof(*stream_mapping));
     if (!stream_mapping) {
@@ -183,6 +186,21 @@ void Rtsp2File::deinit()
     }
 }
 
+cv::Mat avframeToCvmat(const AVFrame *frame) {
+  int width = frame->width;
+  int height = frame->height;
+  cv::Mat image(height, width, CV_8UC3);
+  int cvLinesizes[1];
+  cvLinesizes[0] = image.step1();
+  SwsContext *conversion = sws_getContext(
+      width, height, (AVPixelFormat)frame->format, width, height,
+      AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+  sws_scale(conversion, frame->data, frame->linesize, 0, height, &image.data,
+            cvLinesizes);
+  sws_freeContext(conversion);
+  return image;
+}
+
 void Rtsp2File::run()
 {
     // Define a comparison function for the priority queue
@@ -228,6 +246,7 @@ void Rtsp2File::run()
         pkt->pos = -1;
         // log_packet(ofmt_ctx, pkt, "out");
         
+        if(pkt->stream_index == m_video_stream_index){
         // Send the packet to the decoder
         if (avcodec_send_packet(m_dec_ctxs[pkt->stream_index], pkt) < 0) {
             fprintf(stderr, "Error sending packet to decoder\n");
@@ -240,6 +259,17 @@ void Rtsp2File::run()
             fprintf(stderr, "Error receiving frame from decoder\n");
             // Handle error
         }
+        if(frame->height > 0 && frame->width > 0){
+            cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
+        cv::Mat img = avframeToCvmat(frame);
+        cv::imshow("img", img);
+        cv::waitKey(1);
+        }else{
+            cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
+        }
+
+        }
+
         
         ret = av_interleaved_write_frame(ofmt_ctx, pkt);
         /* pkt is now blank (av_interleaved_write_frame() takes ownership of

@@ -4,6 +4,8 @@ project(remux)
 
 set(CMAKE_CXX_STANDARD 11)
 
+find_package(OpenCV REQUIRED)
+
 add_executable(remux main.cpp rtsp.cpp)
 
 target_link_libraries(remux
@@ -29,4 +31,6 @@ target_link_libraries(remux
     pthread
     atomic
     X11
+    opencv_core
+    opencv_highgui
 )
