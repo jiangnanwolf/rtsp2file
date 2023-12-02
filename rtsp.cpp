@@ -233,27 +233,25 @@ void Rtsp2File::run()
         // log_packet(ofmt_ctx, pkt, "out");
         
         if(pkt->stream_index == m_video_stream_index){
-        // Send the packet to the decoder
-        if (avcodec_send_packet(m_dec_ctxs[pkt->stream_index], pkt) < 0) {
-            fprintf(stderr, "Error sending packet to decoder\n");
-            // Handle error
-        }
+            // Send the packet to the decoder
+            if (avcodec_send_packet(m_dec_ctxs[pkt->stream_index], pkt) < 0) {
+                fprintf(stderr, "Error sending packet to decoder\n");
+                // Handle error
+            }
 
-        // Receive the decoded frame from the decoder
-        AVFrame* frame = av_frame_alloc();
-        if (avcodec_receive_frame(m_dec_ctxs[pkt->stream_index], frame) < 0) {
-            fprintf(stderr, "Error receiving frame from decoder\n");
-            // Handle error
-        }
-        if(frame->height > 0 && frame->width > 0){
-            cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
-        cv::Mat img = avframeToCvmat(frame);
-        cv::imshow("img", img);
-        cv::waitKey(1);
-        }else{
-            cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
-        }
-
+            // Receive the decoded frame from the decoder
+            AVFrame* frame = av_frame_alloc();
+            if (avcodec_receive_frame(m_dec_ctxs[pkt->stream_index], frame) < 0) {
+                fprintf(stderr, "Error receiving frame from decoder\n");
+                // Handle error
+            }
+            if(frame->height > 0 && frame->width > 0){
+                cv::Mat img = avframeToCvmat(frame);
+                // cv::imshow("img", img);
+                // cv::waitKey(0);
+            }else{
+                cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
+            }
         }
 
         
