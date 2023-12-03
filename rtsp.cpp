@@ -82,11 +82,7 @@ void Rtsp2File::init()
     m_dec_ctxs.resize(m_nb_streams);
     m_decoders.resize(m_nb_streams);
 
-    stream_mapping = (int*)av_calloc(m_nb_streams, sizeof(*stream_mapping));
-    if (!stream_mapping) {
-        ret = AVERROR(ENOMEM);
-        return;
-    }
+
 
     ofmt = ofmt_ctx->oformat;
         // Find video stream
@@ -97,7 +93,6 @@ void Rtsp2File::init()
         if (in_codecpar->codec_type != AVMEDIA_TYPE_AUDIO &&
             in_codecpar->codec_type != AVMEDIA_TYPE_VIDEO &&
             in_codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE) {
-            stream_mapping[i] = -1;
             continue;
         }
         if (in_codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -106,8 +101,6 @@ void Rtsp2File::init()
         if (in_codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
             m_audio_stream_index = i;
         }
-
-        stream_mapping[i] = stream_index++;
 
         m_out_streams[i] = avformat_new_stream(ofmt_ctx, NULL);
         if (!m_out_streams[i]) {
@@ -180,7 +173,6 @@ void Rtsp2File::deinit()
         avio_closep(&ofmt_ctx->pb);
     avformat_free_context(ofmt_ctx);
 
-    av_freep(&stream_mapping);
 
     if (ret < 0 && ret != AVERROR_EOF) {
         cerr << "Error occurred: " << err2str(ret);
@@ -207,8 +199,7 @@ void Rtsp2File::run()
             break;
         // log_packet(ifmt_ctx, pkt, "in");
         in_stream  = ifmt_ctx->streams[pkt->stream_index];
-        if (pkt->stream_index >= m_nb_streams ||
-            stream_mapping[pkt->stream_index] < 0) {
+        if (pkt->stream_index >= m_nb_streams ) {
             av_packet_unref(pkt);
             continue;
         }
@@ -221,7 +212,6 @@ void Rtsp2File::run()
 
         last_dts[pkt->stream_index] = pkt->dts;
 
-        pkt->stream_index = stream_mapping[pkt->stream_index];
         out_stream = ofmt_ctx->streams[pkt->stream_index];
         // log_packet(ifmt_ctx, pkt, "in");
 
@@ -264,6 +254,7 @@ void Rtsp2File::run()
             fprintf(stderr, "Error muxing packet\n");
             break;
         }
+        av_packet_unref(pkt);
     }
 
     av_write_trailer(ofmt_ctx);

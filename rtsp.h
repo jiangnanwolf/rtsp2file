@@ -24,8 +24,6 @@ class Rtsp2File
   AVFormatContext *ifmt_ctx = nullptr, *ofmt_ctx = nullptr;
   AVPacket *pkt = nullptr;
   int ret = 0;
-  int stream_index = 0;
-  int *stream_mapping = nullptr;
   int m_nb_streams = 0;
   int m_video_stream_index = -1;
   int m_audio_stream_index = -1;
