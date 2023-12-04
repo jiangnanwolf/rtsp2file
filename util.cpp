@@ -1,20 +1,31 @@
 #include "util.h"
 
+AVFrame2Mat::AVFrame2Mat() : m_width(0), m_height(0), m_swsCtx(nullptr)
+{
+}
 
+AVFrame2Mat::~AVFrame2Mat()
+{
+  sws_freeContext(m_swsCtx);
+}
 
-
-cv::Mat avframeToCvmat(const AVFrame *frame) {
+cv::Mat AVFrame2Mat::operator()(const AVFrame *frame)
+{
   int width = frame->width;
   int height = frame->height;
   cv::Mat image(height, width, CV_8UC3);
   int cvLinesizes[1];
   cvLinesizes[0] = image.step1();
-  SwsContext *conversion = sws_getContext(
-      width, height, (AVPixelFormat)frame->format, width, height,
-      AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-  sws_scale(conversion, frame->data, frame->linesize, 0, height, &image.data,
+  if ( width != m_width || height != m_height || !m_swsCtx ) {
+    m_width = width;
+    m_height = height;
+    sws_freeContext(m_swsCtx);
+    m_swsCtx = sws_getContext(
+        width, height, (AVPixelFormat)frame->format, width, height,
+        AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+  }
+  sws_scale(m_swsCtx, frame->data, frame->linesize, 0, height, &image.data,
             cvLinesizes);
-  sws_freeContext(conversion);
   return image;
 }
 

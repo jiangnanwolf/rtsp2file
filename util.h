@@ -12,7 +12,17 @@ extern "C" {
 #include <opencv2/core.hpp>
 
 
-cv::Mat avframeToCvmat(const AVFrame *frame);
 AVFrame *cvmatToAvframe(cv::Mat *image, AVFrame *frame);
+
+class AVFrame2Mat
+{
+    int m_width;
+    int m_height;
+    SwsContext *m_swsCtx;
+public:
+    AVFrame2Mat();
+    ~AVFrame2Mat();
+    cv::Mat operator()(const AVFrame *frame);
+};
 
 #endif

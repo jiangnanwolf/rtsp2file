@@ -2,6 +2,9 @@
 #include <opencv2/opencv.hpp>
 #include "rtsp.h"
 #include "util.h"
+#include <iostream>
+
+using namespace std;
 
 static string ts2str(int64_t ts)
 {
@@ -123,6 +126,7 @@ void Rtsp2File::init()
             fprintf(stderr, "No decoder found for codec_id\n");
             // Handle error
         }
+                cout << "codec: " << decoder << endl;
 
         // Allocate a new decoding context
         m_dec_ctxs[i] = avcodec_alloc_context3(decoder);
@@ -143,6 +147,8 @@ void Rtsp2File::init()
             // Handle error
         }
     }
+
+
     av_dump_format(ofmt_ctx, 0, fileName.c_str(), 1);
 
     if (!(ofmt->flags & AVFMT_NOFILE)) {
@@ -191,6 +197,7 @@ void Rtsp2File::run()
     size_t window_size = 3;  // Adjust this value as needed
     AVFrame *frame = NULL;
     vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
+    AVFrame2Mat avframe2mat;
     while (1) {
         AVStream *in_stream, *out_stream;
 
@@ -203,14 +210,13 @@ void Rtsp2File::run()
             av_packet_unref(pkt);
             continue;
         }
-
         if (pkt->dts < last_dts[pkt->stream_index]) {
-            cout << "stream_index:" << pkt->stream_index << " dts:" << pkt->dts << " last_dts:" << last_dts[pkt->stream_index] << endl;
             av_packet_unref(pkt);
             continue;
         }
-
+        // cout << "stream_index:" << pkt->stream_index << " dts:" << pkt->dts << " last_dts:" << last_dts[pkt->stream_index] << endl;
         last_dts[pkt->stream_index] = pkt->dts;
+
 
         out_stream = ofmt_ctx->streams[pkt->stream_index];
         // log_packet(ifmt_ctx, pkt, "in");
@@ -236,9 +242,9 @@ void Rtsp2File::run()
                 // Handle error
             }
             if(frame->height > 0 && frame->width > 0){
-                cv::Mat img = avframeToCvmat(frame);
-                // cv::imshow("img", img);
-                // cv::waitKey(0);
+                cv::Mat img = avframe2mat(frame);
+                cv::imshow("img", img);
+                cv::waitKey(1);
             }else{
                 cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
             }
