@@ -39,6 +39,17 @@ static string err2str(int errnum)
     return errbuf;
 }
 
+Codec::Codec() : m_out_streams(nullptr), m_in_streams(nullptr), m_dec_ctxs(nullptr)
+{
+}
+
+Codec::~Codec()
+{
+    if(m_dec_ctxs){
+        avcodec_free_context(&m_dec_ctxs);
+    }
+}
+
 Rtsp2File::Rtsp2File(const string& rtspUrl, const string& fileName):
     rtspUrl(rtspUrl),
     fileName(fileName)
@@ -80,18 +91,13 @@ void Rtsp2File::init()
     }
 
     m_nb_streams = ifmt_ctx->nb_streams;
-    m_in_streams.resize(m_nb_streams);
-    m_out_streams.resize(m_nb_streams);
-    m_dec_ctxs.resize(m_nb_streams);
-    m_decoders.resize(m_nb_streams);
-
-
+    m_codecs.resize(m_nb_streams);
 
     ofmt = ofmt_ctx->oformat;
         // Find video stream
     for (int i = 0; i < ifmt_ctx->nb_streams; i++) {
-        m_in_streams[i] = ifmt_ctx->streams[i];
-        AVCodecParameters *in_codecpar = m_in_streams[i]->codecpar;
+        m_codecs[i].m_in_streams = ifmt_ctx->streams[i];
+        AVCodecParameters *in_codecpar = m_codecs[i].m_in_streams->codecpar;
 
         if (in_codecpar->codec_type != AVMEDIA_TYPE_AUDIO &&
             in_codecpar->codec_type != AVMEDIA_TYPE_VIDEO &&
@@ -105,23 +111,23 @@ void Rtsp2File::init()
             m_audio_stream_index = i;
         }
 
-        m_out_streams[i] = avformat_new_stream(ofmt_ctx, NULL);
-        if (!m_out_streams[i]) {
+        m_codecs[i].m_out_streams = avformat_new_stream(ofmt_ctx, NULL);
+        if (!m_codecs[i].m_out_streams) {
             cerr << "Failed allocating output stream" << endl;
             ret = AVERROR_UNKNOWN;
             return;
         }
 
-        ret = avcodec_parameters_copy(m_out_streams[i]->codecpar, in_codecpar);
+        ret = avcodec_parameters_copy(m_codecs[i].m_out_streams->codecpar, in_codecpar);
         if (ret < 0) {
             cerr << "Failed to copy codec parameters" << endl;
             return;
         }
-        m_out_streams[i]->codecpar->codec_tag = 0;
+        m_codecs[i].m_out_streams->codecpar->codec_tag = 0;
 
 
         // Find the decoder for the stream
-        const AVCodec* decoder = avcodec_find_decoder(m_in_streams[i]->codecpar->codec_id);
+        const AVCodec* decoder = avcodec_find_decoder(m_codecs[i].m_in_streams->codecpar->codec_id);
         if (!decoder) {
             fprintf(stderr, "No decoder found for codec_id\n");
             // Handle error
@@ -129,20 +135,20 @@ void Rtsp2File::init()
                 cout << "codec: " << decoder << endl;
 
         // Allocate a new decoding context
-        m_dec_ctxs[i] = avcodec_alloc_context3(decoder);
-        if (!m_dec_ctxs[i]) {
+        m_codecs[i].m_dec_ctxs = avcodec_alloc_context3(decoder);
+        if (!m_codecs[i].m_dec_ctxs) {
             fprintf(stderr, "Could not allocate decoding context\n");
             // Handle error
         }
 
         // Copy the codec parameters from the input stream to the new decoding context
-        if (avcodec_parameters_to_context(m_dec_ctxs[i], m_in_streams[i]->codecpar) < 0) {
+        if (avcodec_parameters_to_context(m_codecs[i].m_dec_ctxs, m_codecs[i].m_in_streams->codecpar) < 0) {
             fprintf(stderr, "Could not copy parameters to context\n");
             // Handle error
         }
 
         // Open the codec
-        if (avcodec_open2(m_dec_ctxs[i], decoder, NULL) < 0) {
+        if (avcodec_open2(m_codecs[i].m_dec_ctxs, decoder, NULL) < 0) {
             fprintf(stderr, "Could not open codec\n");
             // Handle error
         }
@@ -230,14 +236,14 @@ void Rtsp2File::run()
         
         if(pkt->stream_index == m_video_stream_index){
             // Send the packet to the decoder
-            if (avcodec_send_packet(m_dec_ctxs[pkt->stream_index], pkt) < 0) {
+            if (avcodec_send_packet(m_codecs[pkt->stream_index].m_dec_ctxs, pkt) < 0) {
                 fprintf(stderr, "Error sending packet to decoder\n");
                 // Handle error
             }
 
             // Receive the decoded frame from the decoder
             AVFrame* frame = av_frame_alloc();
-            if (avcodec_receive_frame(m_dec_ctxs[pkt->stream_index], frame) < 0) {
+            if (avcodec_receive_frame(m_codecs[pkt->stream_index].m_dec_ctxs, frame) < 0) {
                 fprintf(stderr, "Error receiving frame from decoder\n");
                 // Handle error
             }

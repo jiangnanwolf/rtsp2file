@@ -15,6 +15,16 @@ extern "C"
 #include <vector>
 using namespace std;
 
+struct Codec
+{
+  AVStream* m_out_streams;
+  AVStream* m_in_streams;
+  AVCodecContext* m_dec_ctxs;
+
+  Codec();
+  ~Codec();
+};
+
 class Rtsp2File
 {
   const string rtspUrl;
@@ -27,10 +37,7 @@ class Rtsp2File
   int m_nb_streams = 0;
   int m_video_stream_index = -1;
   int m_audio_stream_index = -1;
-  vector<AVStream*> m_out_streams;
-  vector<AVStream*> m_in_streams;
-  vector<AVCodec*> m_decoders;
-  vector<AVCodecContext*> m_dec_ctxs;
+  vector<Codec> m_codecs;
 
   void init();
   void deinit();
