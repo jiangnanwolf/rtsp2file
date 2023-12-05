@@ -204,6 +204,10 @@ void Rtsp2File::run()
     AVFrame *frame = NULL;
     vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
     AVFrame2Mat avframe2mat;
+
+    cv::HOGDescriptor hog;
+    hog.setSVMDetector(cv::HOGDescriptor::getDefaultPeopleDetector());
+
     while (1) {
         AVStream *in_stream, *out_stream;
 
@@ -249,6 +253,19 @@ void Rtsp2File::run()
             }
             if(frame->height > 0 && frame->width > 0){
                 cv::Mat img = avframe2mat(frame);
+
+                // Detect humans in the image
+                std::vector<cv::Rect> detections;
+                std::vector<double> weights;
+                hog.detectMultiScale(img, detections, weights);
+
+                // Draw the detections on the image
+                for (size_t i = 0; i < detections.size(); i++) {
+                    if (weights[i] > 0.6) {  // You can adjust this threshold
+                        cv::rectangle(img, detections[i], cv::Scalar(0, 0, 255), 2);
+                    }
+                }
+
                 cv::imshow("img", img);
                 cv::waitKey(1);
             }else{

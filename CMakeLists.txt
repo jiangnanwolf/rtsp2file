@@ -6,8 +6,7 @@ set(CMAKE_CXX_STANDARD 11)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined")
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address,undefined")
 
-
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED objdetect)
 
 add_executable(remux main.cpp rtsp.cpp util.cpp)
 
@@ -19,4 +18,5 @@ target_link_libraries(remux
     pthread
     opencv_core
     opencv_highgui
+    ${OpenCV_LIBS}
 )
