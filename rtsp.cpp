@@ -1,8 +1,10 @@
 #include <queue> // std::priority_queue
+#include <iostream>
+
 #include <opencv2/opencv.hpp>
+
 #include "rtsp.h"
 #include "util.h"
-#include <iostream>
 
 using namespace std;
 
@@ -253,16 +255,27 @@ void Rtsp2File::run()
             }
             if(frame->height > 0 && frame->width > 0){
                 cv::Mat img = avframe2mat(frame);
+                // Define the desired smaller size
+                cv::Size smallerSize(320, 240); // Adjust the size as needed
 
-                // Detect humans in the image
+                // Resize the image
+                cv::Mat resizedImg;
+                cv::resize(img, resizedImg, smallerSize);
+
+                // Detect humans in the resized image
                 std::vector<cv::Rect> detections;
                 std::vector<double> weights;
-                hog.detectMultiScale(img, detections, weights);
+                hog.detectMultiScale(resizedImg, detections, weights);
 
-                // Draw the detections on the image
+                // Draw the detections on the original image
                 for (size_t i = 0; i < detections.size(); i++) {
                     if (weights[i] > 0.6) {  // You can adjust this threshold
-                        cv::rectangle(img, detections[i], cv::Scalar(0, 0, 255), 2);
+                        // Scale the detection coordinates back to the original image size
+                        cv::Rect originalRect(detections[i].x * img.cols / smallerSize.width,
+                                            detections[i].y * img.rows / smallerSize.height,
+                                            detections[i].width * img.cols / smallerSize.width,
+                                            detections[i].height * img.rows / smallerSize.height);
+                        cv::rectangle(img, originalRect, cv::Scalar(0, 0, 255), 2);
                     }
                 }
 
@@ -273,7 +286,6 @@ void Rtsp2File::run()
             }
             av_frame_free(&frame);
         }
-
         
         ret = av_interleaved_write_frame(ofmt_ctx, pkt);
         /* pkt is now blank (av_interleaved_write_frame() takes ownership of
