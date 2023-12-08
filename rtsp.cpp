@@ -193,6 +193,25 @@ void Rtsp2File::deinit()
     }
 }
 
+std::vector<std::string> getOutputsNames(const cv::dnn::Net& net)
+{
+    static std::vector<std::string> names;
+    if (names.empty())
+    {
+        // Get the indices of the output layers, i.e. the layers with unconnected outputs
+        std::vector<int> outLayers = net.getUnconnectedOutLayers();
+
+        // Get the names of all the layers in the network
+        std::vector<std::string> layersNames = net.getLayerNames();
+
+        // Get the names of the output layers in names
+        names.resize(outLayers.size());
+        for (size_t i = 0; i < outLayers.size(); ++i)
+            names[i] = layersNames[outLayers[i] - 1];
+    }
+    return names;
+}
+
 void Rtsp2File::run()
 {
     // Define a comparison function for the priority queue
@@ -207,9 +226,9 @@ void Rtsp2File::run()
     vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
     AVFrame2Mat avframe2mat;
 
-    cv::HOGDescriptor hog;
-    hog.setSVMDetector(cv::HOGDescriptor::getDefaultPeopleDetector());
-
+    cv::dnn::Net net = cv::dnn::readNetFromDarknet("/home/l/MyCode/darknet/cfg/yolov3-tiny.cfg", "/home/l/MyCode/darknet/yolov3-tiny.weights");
+    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
     while (1) {
         AVStream *in_stream, *out_stream;
 
@@ -265,18 +284,43 @@ void Rtsp2File::run()
                 // Detect humans in the resized image
                 std::vector<cv::Rect> detections;
                 std::vector<double> weights;
-                hog.detectMultiScale(resizedImg, detections, weights);
+                cv::Mat blob;
+                cv::dnn::blobFromImage(resizedImg, blob, 1/255.0, cv::Size(416, 416), cv::Scalar(0,0,0), true, false);
+                net.setInput(blob);
 
-                // Draw the detections on the original image
-                for (size_t i = 0; i < detections.size(); i++) {
-                    if (weights[i] > 0.6) {  // You can adjust this threshold
-                        // Scale the detection coordinates back to the original image size
-                        cv::Rect originalRect(detections[i].x * img.cols / smallerSize.width,
-                                            detections[i].y * img.rows / smallerSize.height,
-                                            detections[i].width * img.cols / smallerSize.width,
-                                            detections[i].height * img.rows / smallerSize.height);
-                        cv::rectangle(img, originalRect, cv::Scalar(0, 0, 255), 2);
+                std::vector<cv::Mat> outs;
+                net.forward(outs, getOutputsNames(net));
+
+                for (size_t i = 0; i < outs.size(); ++i)
+                {
+                    // for each detection from each output layer
+                    // get the confidence, class id, bounding box params
+                    // and ignore weak detections (confidence < 0.5)
+                    float* data = (float*)outs[i].data;
+                    for (int j = 0; j < outs[i].rows; ++j, data += outs[i].cols)
+                    {
+                        cv::Mat scores = outs[i].row(j).colRange(5, outs[i].cols);
+                        cv::Point classIdPoint;
+                        double confidence;
+                        minMaxLoc(scores, 0, &confidence, 0, &classIdPoint);
+                        if (confidence > 0.6)
+                        {
+                            int centerX = (int)(data[0] * img.cols);
+                            int centerY = (int)(data[1] * img.rows);
+                            int width = (int)(data[2] * img.cols);
+                            int height = (int)(data[3] * img.rows);
+                            int left = centerX - width / 2;
+                            int top = centerY - height / 2;
+                            
+                            detections.push_back(cv::Rect(left, top, width, height));
+                            weights.push_back(confidence);
+                        }
                     }
+                }
+
+                // Draw bounding boxes around detected humans
+                for (const cv::Rect& detection : detections) {
+                    cv::rectangle(img, detection, cv::Scalar(0, 255, 0), 2);
                 }
 
                 cv::imshow("img", img);
