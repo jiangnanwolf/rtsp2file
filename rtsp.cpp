@@ -1,11 +1,13 @@
-#include <queue> // std::priority_queue
+#include <queue>
 #include <iostream>
+#include <thread>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/ocl.hpp>
 
 #include "rtsp.h"
 #include "util.h"
+#include "global.h"
 
 using namespace std;
 
@@ -213,6 +215,12 @@ std::vector<std::string> getOutputsNames(const cv::dnn::Net& net)
     return names;
 }
 
+void Rtsp2File::startThreadPool()
+{
+    thread t(&Rtsp2File::run, this);
+    t.detach();
+}
+
 void Rtsp2File::run()
 {
     // Define a comparison function for the priority queue
@@ -230,6 +238,8 @@ void Rtsp2File::run()
     cv::dnn::Net net = cv::dnn::readNetFromDarknet("cfg/yolov3-tiny.cfg", "yolov3-tiny.weights");
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_OPENCL);
+
+
 
     while (1) {
         AVStream *in_stream, *out_stream;
@@ -276,6 +286,7 @@ void Rtsp2File::run()
             }
             if(frame->height > 0 && frame->width > 0){
                 cv::Mat img = avframe2mat(frame);
+                g_queue.Push(img);
                 // Define the desired smaller size
                 cv::Size smallerSize(320, 240); // Adjust the size as needed
 

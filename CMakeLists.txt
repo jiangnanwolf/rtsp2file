@@ -9,7 +9,7 @@ set(CMAKE_ENABLE_EXPORTS true)
 
 find_package(OpenCV REQUIRED objdetect)
 
-add_executable(remux main.cpp rtsp.cpp util.cpp crash_handler.cpp)
+add_executable(remux main.cpp rtsp.cpp util.cpp crash_handler.cpp global.cpp)
 
 target_link_libraries(remux
     avformat

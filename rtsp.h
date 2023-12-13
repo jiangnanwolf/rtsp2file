@@ -47,6 +47,7 @@ public:
     ~Rtsp2File();
 
     void run();
+    void startThreadPool();
 };
 
 #endif
