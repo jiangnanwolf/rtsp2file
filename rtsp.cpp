@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/ocl.hpp>
 
 #include "rtsp.h"
 #include "util.h"
@@ -226,9 +227,10 @@ void Rtsp2File::run()
     vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
     AVFrame2Mat avframe2mat;
 
-    cv::dnn::Net net = cv::dnn::readNetFromDarknet("/home/l/MyCode/darknet/cfg/yolov3-tiny.cfg", "/home/l/MyCode/darknet/yolov3-tiny.weights");
+    cv::dnn::Net net = cv::dnn::readNetFromDarknet("cfg/yolov3-tiny.cfg", "yolov3-tiny.weights");
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+    net.setPreferableTarget(cv::dnn::DNN_TARGET_OPENCL);
+
     while (1) {
         AVStream *in_stream, *out_stream;
 

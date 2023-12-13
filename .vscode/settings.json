@@ -60,6 +60,10 @@
         "cfenv": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "optional": "cpp"
+        "optional": "cpp",
+        "chrono": "cpp",
+        "list": "cpp",
+        "iomanip": "cpp",
+        "typeindex": "cpp"
     }
 }
