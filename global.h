@@ -2,7 +2,7 @@
 #define _GLOBAL_H_
 
 #include <opencv2/opencv.hpp>
-#include "ThreadSafeQueue.h"
+#include "q.h"
 
 extern ThreadSafeQueue<cv::Mat> g_queue;
 
