@@ -8,6 +8,7 @@
 #include "rtsp.h"
 #include "util.h"
 #include "global.h"
+#include "objdetect.h"
 
 using namespace std;
 
@@ -196,28 +197,14 @@ void Rtsp2File::deinit()
     }
 }
 
-std::vector<std::string> getOutputsNames(const cv::dnn::Net& net)
-{
-    static std::vector<std::string> names;
-    if (names.empty())
-    {
-        // Get the indices of the output layers, i.e. the layers with unconnected outputs
-        std::vector<int> outLayers = net.getUnconnectedOutLayers();
 
-        // Get the names of all the layers in the network
-        std::vector<std::string> layersNames = net.getLayerNames();
-
-        // Get the names of the output layers in names
-        names.resize(outLayers.size());
-        for (size_t i = 0; i < outLayers.size(); ++i)
-            names[i] = layersNames[outLayers[i] - 1];
-    }
-    return names;
-}
 
 void Rtsp2File::startThreadPool()
 {
-    thread t(&Rtsp2File::run, this);
+    thread t([]() {
+        ObjDetect detect;
+        detect.run();
+    });
     t.detach();
 }
 
@@ -235,8 +222,8 @@ void Rtsp2File::run()
     vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
     AVFrame2Mat avframe2mat;
 
-
-
+    unsigned int ncores = std::thread::hardware_concurrency();
+    startThreadPool();
 
 
     while (1) {
@@ -291,6 +278,8 @@ void Rtsp2File::run()
             }
             av_frame_free(&frame);
         }
+
+        // TODO: check if we need to save the frame
         
         ret = av_interleaved_write_frame(ofmt_ctx, pkt);
         /* pkt is now blank (av_interleaved_write_frame() takes ownership of

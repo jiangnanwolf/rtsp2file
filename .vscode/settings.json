@@ -64,6 +64,10 @@
         "chrono": "cpp",
         "list": "cpp",
         "iomanip": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "charconv": "cpp",
+        "format": "cpp",
+        "span": "cpp",
+        "variant": "cpp"
     }
 }
