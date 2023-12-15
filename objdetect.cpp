@@ -4,18 +4,17 @@
 ObjDetect::ObjDetect()
 {
     // Load the network
-    m_net = cv::dnn::readNetFromDarknet("cfg/yolov3-tiny.cfg", "yolov3-tiny.weights");
+    m_net = cv::dnn::readNetFromDarknet("/home/l/MyCode/rtsp2file/build/cfg/yolov3-tiny.cfg", "/home/l/MyCode/rtsp2file/build/yolov3-tiny.weights");
     m_net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
     m_net.setPreferableTarget(cv::dnn::DNN_TARGET_OPENCL);
 
 }
 
-void ObjDetect::run()
+void ObjDetect::run(int idx)
 {
     while (g_quit == false) {
         cv::Mat img;
-        bool quit = g_queue.WaitAndPop(img);
-        if (quit) {
+        if (!g_queue.WaitAndPop(img)) {
             break;
         }
         // Define the desired smaller size
@@ -66,8 +65,8 @@ void ObjDetect::run()
         for (const cv::Rect& detection : detections) {
             cv::rectangle(img, detection, cv::Scalar(0, 255, 0), 2);
         }
-
-        cv::imshow("img", img);
+        std::string str = "thread " + std::to_string(idx);
+        cv::imshow(str, img);
         cv::waitKey(1);
         
     }

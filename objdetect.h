@@ -12,7 +12,7 @@ private:
 public:
     ObjDetect();
     void detect(cv::Mat& frame);
-    void run();
+    void run(int idx);
 };
 
 #endif

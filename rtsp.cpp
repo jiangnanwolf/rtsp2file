@@ -201,11 +201,14 @@ void Rtsp2File::deinit()
 
 void Rtsp2File::startThreadPool()
 {
-    thread t([]() {
-        ObjDetect detect;
-        detect.run();
-    });
-    t.detach();
+    unsigned int ncores = std::thread::hardware_concurrency();
+    for(unsigned int i = 0; i < ncores; ++i){
+        thread t([i]() { // Capture the variable 'i' in the lambda function
+            ObjDetect detect;
+            detect.run(i);
+        });
+        t.detach();
+    }
 }
 
 void Rtsp2File::run()
@@ -222,7 +225,7 @@ void Rtsp2File::run()
     vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
     AVFrame2Mat avframe2mat;
 
-    unsigned int ncores = std::thread::hardware_concurrency();
+
     startThreadPool();
 
 
@@ -293,4 +296,6 @@ void Rtsp2File::run()
     }
 
     av_write_trailer(ofmt_ctx);
+
+    g_queue.Quit();
 }

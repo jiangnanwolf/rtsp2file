@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/remux",
             // "args": ["rtsp://10.42.0.143/tenda", "output.mkv"],
-            "args": ["~/Videos/withAudio.mkv", "~/Videos/output.mkv"],
+            "args": ["/home/l/Videos/face-demographics-walking.mp4", "/home/l/Videos/output.mkv"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],
@@ -28,7 +28,14 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "Run without debugging",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/remux",
+            "args": ["/home/l/Videos/face-demographics-walking.mp4", "/home/l/Videos/output.mkv"],
+            "noDebug": true
         }
-
     ]
 }

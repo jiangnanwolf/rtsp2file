@@ -12,6 +12,7 @@
 #include <string>
 
 #include "crash_handler.h"
+#include "global.h"
 
 using namespace std;
 
@@ -74,5 +75,6 @@ void backtrace_print(void)
     }
 
     free(strings);
+    g_queue.Quit();
     exit(EXIT_FAILURE);
 }
