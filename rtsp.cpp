@@ -202,7 +202,7 @@ void Rtsp2File::deinit()
 void Rtsp2File::startThreadPool()
 {
     unsigned int ncores = std::thread::hardware_concurrency();
-    for(unsigned int i = 0; i < ncores; ++i){
+    for(unsigned int i = 0; i < 1; ++i){
         thread t([i]() { // Capture the variable 'i' in the lambda function
             ObjDetect detect;
             detect.run(i);
