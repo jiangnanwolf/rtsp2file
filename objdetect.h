@@ -11,7 +11,6 @@ private:
     std::vector<cv::String> getOutputsNames(const cv::dnn::Net& net);
 public:
     ObjDetect();
-    void detect(cv::Mat& frame);
     void run(int idx);
 };
 
