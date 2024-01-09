@@ -7,6 +7,7 @@
 
 extern ThreadSafeQueue<cv::Mat> g_queue;
 extern std::atomic_bool g_quit;
+extern std::atomic_int g_frame_count;
 
 
 #endif

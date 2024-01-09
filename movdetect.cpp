@@ -44,10 +44,14 @@ void MovDetect::run() {
         cv::resize(img, resizedImg, cv::Size(320, 200));
 
         bool isMoving = detectMovement(resizedImg);
-
-        cv::imshow("frame", img);
-        if (cv::waitKey(1) == 27) {
-            break;
+        if (isMoving) {
+            std::cout << "Movement detected!" << std::endl;
+            g_frame_count = 300;
         }
+
+        // cv::imshow("mov", img);
+        // if (cv::waitKey(1) == 27) {
+        //     break;
+        // }
     }
 }

@@ -9,6 +9,7 @@
 #include "util.h"
 #include "global.h"
 #include "objdetect.h"
+#include "movdetect.h"
 
 using namespace std;
 
@@ -202,13 +203,20 @@ void Rtsp2File::deinit()
 void Rtsp2File::startThreadPool()
 {
     unsigned int ncores = std::thread::hardware_concurrency();
-    for(unsigned int i = 0; i < 1; ++i){
-        thread t([i]() { // Capture the variable 'i' in the lambda function
-            ObjDetect detect;
-            detect.run(i);
-        });
-        t.detach();
-    }
+
+    // thread t1([]() {
+    //     ObjDetect detect;
+    //     detect.run();
+    // });
+    // t1.detach();
+
+
+    thread t2([]() {
+        MovDetect detect;
+        detect.run();
+    });
+    t2.detach();
+
 }
 
 void Rtsp2File::run()
@@ -226,8 +234,8 @@ void Rtsp2File::run()
     AVFrame2Mat avframe2mat;
 
 
-    startThreadPool();
-
+    // startThreadPool();
+            int64_t frame_number = 0; // The current frame number
 
     while (1) {
         AVStream *in_stream, *out_stream;
@@ -257,41 +265,55 @@ void Rtsp2File::run()
         // cout << "out_stream:" << out_stream->time_base.den << " : "<<  out_stream->time_base.num << endl;
         av_packet_rescale_ts(pkt, in_stream->time_base, out_stream->time_base);
         pkt->pos = -1;
-        // log_packet(ofmt_ctx, pkt, "out");
+        // // log_packet(ofmt_ctx, pkt, "out");
         
-        if(pkt->stream_index == m_video_stream_index){
-            // Send the packet to the decoder
-            if (avcodec_send_packet(m_codecs[pkt->stream_index].m_dec_ctxs, pkt) < 0) {
-                fprintf(stderr, "Error sending packet to decoder\n");
-                // Handle error
-            }
+        // if(pkt->stream_index == m_video_stream_index){
+        //     // Send the packet to the decoder
+        //     if (avcodec_send_packet(m_codecs[pkt->stream_index].m_dec_ctxs, pkt) < 0) {
+        //         fprintf(stderr, "Error sending packet to decoder\n");
+        //         // Handle error
+        //     }
 
-            // Receive the decoded frame from the decoder
-            AVFrame* frame = av_frame_alloc();
-            if (avcodec_receive_frame(m_codecs[pkt->stream_index].m_dec_ctxs, frame) < 0) {
-                fprintf(stderr, "Error receiving frame from decoder\n");
-                // Handle error
-            }
-            if(frame->height > 0 && frame->width > 0){
-                cv::Mat img = avframe2mat(frame);
-                g_queue.Push(img);
+        //     // Receive the decoded frame from the decoder
+        //     AVFrame* frame = av_frame_alloc();
+        //     if (avcodec_receive_frame(m_codecs[pkt->stream_index].m_dec_ctxs, frame) < 0) {
+        //         fprintf(stderr, "Error receiving frame from decoder\n");
+        //         // Handle error
+        //     }
+        //     if(frame->height > 0 && frame->width > 0){
+        //         cv::Mat img = avframe2mat(frame);
+        //         g_queue.Push(img);
 
-            }else{
-                cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
-            }
-            av_frame_free(&frame);
-        }
+        //     }else{
+        //         cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
+        //     }
+        //     av_frame_free(&frame);
+        // }
 
         // TODO: check if we need to save the frame
+        // if (g_frame_count > 0) {
+        //     g_frame_count--;
         
-        ret = av_interleaved_write_frame(ofmt_ctx, pkt);
-        /* pkt is now blank (av_interleaved_write_frame() takes ownership of
-         * its contents and resets pkt), so that no unreferencing is necessary.
-         * This would be different if one used av_write_frame(). */
-        if (ret < 0) {
-            fprintf(stderr, "Error muxing packet\n");
-            break;
-        }
+        // Assuming you have these values available
+
+
+            // Calculate the PTS and DTS
+            int frame_rate = av_q2d(in_stream->avg_frame_rate);
+            pkt->pts = av_rescale_q(frame_number, (AVRational){1, frame_rate}, out_stream->time_base);
+            pkt->dts = pkt->pts; // In many cases, DTS and PTS will be the same
+
+            frame_number++;
+
+            ret = av_interleaved_write_frame(ofmt_ctx, pkt);
+            /* pkt is now blank (av_interleaved_write_frame() takes ownership of
+            * its contents and resets pkt), so that no unreferencing is necessary.
+            * This would be different if one used av_write_frame(). */
+            if (ret < 0) {
+                fprintf(stderr, "Error muxing packet\n");
+                break;
+            }
+        // }
+
         av_packet_unref(pkt);
     }
 

@@ -13,7 +13,7 @@ ObjDetect::ObjDetect()
 
 }
 
-void ObjDetect::run(int idx)
+void ObjDetect::run()
 {
     while (g_quit == false) {
         cv::Mat img;
@@ -69,8 +69,7 @@ void ObjDetect::run(int idx)
         for (const cv::Rect& detection : detections) {
             cv::rectangle(img, detection, cv::Scalar(0, 255, 0), 2);
         }
-        std::string str = "thread " + std::to_string(idx);
-        cv::imshow(str, img);
+        cv::imshow("obj", img);
         cv::waitKey(1);
         
     }
