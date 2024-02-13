@@ -46,278 +46,275 @@ static string err2str(int errnum)
     return errbuf;
 }
 
-Codec::Codec() : m_out_streams(nullptr), m_in_streams(nullptr), m_dec_ctxs(nullptr)
-{
-}
 
-Codec::~Codec()
+Rtsp2File::Rtsp2File(const string& input, const string& output):
+    input(input),
+    output(output)
 {
-    if(m_dec_ctxs){
-        avcodec_free_context(&m_dec_ctxs);
-    }
-}
-
-Rtsp2File::Rtsp2File(const string& rtspUrl, const string& fileName):
-    rtspUrl(rtspUrl),
-    fileName(fileName)
-{
-    init();
 }
 
 
 Rtsp2File::~Rtsp2File()
 {
-    deinit();
-}
-
-void Rtsp2File::init()
-{
-    pkt = av_packet_alloc();
-    if (!pkt) {
-        fprintf(stderr, "Could not allocate AVPacket\n");
-        return;
-    }
-
-    if ((ret = avformat_open_input(&ifmt_ctx, rtspUrl.c_str(), 0, 0)) < 0) {
-        cerr << "Could not open input file " << rtspUrl << endl;
-        return;
-    }
-
-    if ((ret = avformat_find_stream_info(ifmt_ctx, 0)) < 0) {
-        cerr << "Could not open input file " << rtspUrl << endl;
-        return;
-    }
-
-    av_dump_format(ifmt_ctx, 0, rtspUrl.c_str(), 0);
-
-    avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, fileName.c_str());
-    if (!ofmt_ctx) {
-        cerr << "Could not create output context\n" << endl;
-        ret = AVERROR_UNKNOWN;
-        return;
-    }
-
-    m_nb_streams = ifmt_ctx->nb_streams;
-    m_codecs.resize(m_nb_streams);
-
-    ofmt = ofmt_ctx->oformat;
-        // Find video stream
-    for (int i = 0; i < ifmt_ctx->nb_streams; i++) {
-        m_codecs[i].m_in_streams = ifmt_ctx->streams[i];
-        AVCodecParameters *in_codecpar = m_codecs[i].m_in_streams->codecpar;
-
-        if (in_codecpar->codec_type != AVMEDIA_TYPE_AUDIO &&
-            in_codecpar->codec_type != AVMEDIA_TYPE_VIDEO &&
-            in_codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE) {
-            continue;
-        }
-        if (in_codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            m_video_stream_index = i;
-        }
-        if (in_codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-            m_audio_stream_index = i;
-        }
-
-        m_codecs[i].m_out_streams = avformat_new_stream(ofmt_ctx, NULL);
-        if (!m_codecs[i].m_out_streams) {
-            cerr << "Failed allocating output stream" << endl;
-            ret = AVERROR_UNKNOWN;
-            return;
-        }
-
-        ret = avcodec_parameters_copy(m_codecs[i].m_out_streams->codecpar, in_codecpar);
-        if (ret < 0) {
-            cerr << "Failed to copy codec parameters" << endl;
-            return;
-        }
-        m_codecs[i].m_out_streams->codecpar->codec_tag = 0;
-
-
-        // Find the decoder for the stream
-        const AVCodec* decoder = avcodec_find_decoder(m_codecs[i].m_in_streams->codecpar->codec_id);
-        if (!decoder) {
-            fprintf(stderr, "No decoder found for codec_id\n");
-            // Handle error
-        }
-                cout << "codec: " << decoder << endl;
-
-        // Allocate a new decoding context
-        m_codecs[i].m_dec_ctxs = avcodec_alloc_context3(decoder);
-        if (!m_codecs[i].m_dec_ctxs) {
-            fprintf(stderr, "Could not allocate decoding context\n");
-            // Handle error
-        }
-
-        // Copy the codec parameters from the input stream to the new decoding context
-        if (avcodec_parameters_to_context(m_codecs[i].m_dec_ctxs, m_codecs[i].m_in_streams->codecpar) < 0) {
-            fprintf(stderr, "Could not copy parameters to context\n");
-            // Handle error
-        }
-
-        // Open the codec
-        if (avcodec_open2(m_codecs[i].m_dec_ctxs, decoder, NULL) < 0) {
-            fprintf(stderr, "Could not open codec\n");
-            // Handle error
-        }
-    }
-
-
-    av_dump_format(ofmt_ctx, 0, fileName.c_str(), 1);
-
-    if (!(ofmt->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&ofmt_ctx->pb, fileName.c_str(), AVIO_FLAG_WRITE);
-        if (ret < 0) {
-            cerr << "Could not open output file " << fileName << endl;
-            cerr << err2str(ret) << endl;
-            return;
-        }
-    }
-
-    ret = avformat_write_header(ofmt_ctx, NULL);
-    if (ret < 0) {
-        fprintf(stderr, "Error occurred when opening output file\n");
-        cerr << err2str(ret) << endl;
-        return;
-    }
-}
-
-void Rtsp2File::deinit()
-{
-    av_packet_free(&pkt);
-
-    avformat_close_input(&ifmt_ctx);
-
-    /* close output */
-    if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
-        avio_closep(&ofmt_ctx->pb);
-    avformat_free_context(ofmt_ctx);
-
-
-    if (ret < 0 && ret != AVERROR_EOF) {
-        cerr << "Error occurred: " << err2str(ret);
-    }
 }
 
 
 
 void Rtsp2File::startThreadPool()
 {
-    unsigned int ncores = std::thread::hardware_concurrency();
+  unsigned int ncores = std::thread::hardware_concurrency();
 
-    // thread t1([]() {
-    //     ObjDetect detect;
-    //     detect.run();
-    // });
-    // t1.detach();
+  // thread t1([]() {
+  //     ObjDetect detect;
+  //     detect.run();
+  // });
+  // t1.detach();
 
 
-    thread t2([]() {
-        MovDetect detect;
-        detect.run();
-    });
-    t2.detach();
+  thread t2([]() {
+      MovDetect detect;
+      detect.run();
+  });
+  t2.detach();
+}
 
+static int decode_packet(AVCodecContext *dec, const AVPacket *pkt)
+{
+    int ret = 0;
+    AVFrame *frame = av_frame_alloc();
+
+    // submit the packet to the decoder
+    ret = avcodec_send_packet(dec, pkt);
+    if (ret < 0) {
+        fprintf(stderr, "Error submitting a packet for decoding (%s)\n", err2str(ret).c_str());
+        return ret;
+    }
+
+    // get all the available frames from the decoder
+    while (ret >= 0) {
+        ret = avcodec_receive_frame(dec, frame);
+        if (ret < 0) {
+            // those two return values are special and mean there is no output
+            // frame available, but there were no errors during decoding
+            if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
+                return 0;
+
+            fprintf(stderr, "Error during decoding (%s)\n", err2str(ret).c_str());
+            return ret;
+        }
+
+        // write the frame data to output file
+        if (dec->codec->type == AVMEDIA_TYPE_VIDEO)
+            ret = 1;//output_video_frame(frame);
+        else
+            ret = 1;//output_audio_frame(frame);
+
+        av_frame_unref(frame);
+        if (ret < 0)
+            return ret;
+    }
+
+    return 0;
 }
 
 void Rtsp2File::run()
 {
-    // Define a comparison function for the priority queue
-    auto compare = [](AVPacket* a, AVPacket* b) {
-        return a->dts > b->dts;
-    };
-    vector<priority_queue<AVPacket*, vector<AVPacket*>, decltype(compare)>> buffer(m_nb_streams, priority_queue<AVPacket*, std::vector<AVPacket*>, decltype(compare)>(compare));
+  const AVOutputFormat *ofmt = NULL;
+  AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
+  AVPacket *pkt = NULL;
+  const char *in_filename, *out_filename;
+  int ret, i;
+  int stream_index = 0;
+  int video_index = -1;
+  int *stream_mapping = NULL;
+  int stream_mapping_size = 0;
 
-    // Define the window size
-    size_t window_size = 3;  // Adjust this value as needed
-    AVFrame *frame = NULL;
-    vector<int64_t> last_dts(m_nb_streams,INT64_MIN);
-    AVFrame2Mat avframe2mat;
+  in_filename  = input.c_str();
+  out_filename = output.c_str();
+
+  pkt = av_packet_alloc();
+  if (!pkt) {
+    fprintf(stderr, "Could not allocate AVPacket\n");
+    return;
+  }
+
+  if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
+      fprintf(stderr, "Could not open input file '%s'", in_filename);
+      return;
+  }
+
+  if ((ret = avformat_find_stream_info(ifmt_ctx, 0)) < 0) {
+      fprintf(stderr, "Failed to retrieve input stream information");
+      return;
+  }
+
+  av_dump_format(ifmt_ctx, 0, in_filename, 0);
+
+  avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, out_filename);
+  if (!ofmt_ctx) {
+      fprintf(stderr, "Could not create output context\n");
+      ret = AVERROR_UNKNOWN;
+      return;
+  }
+
+  stream_mapping_size = ifmt_ctx->nb_streams;
+  stream_mapping = (int*)av_calloc(stream_mapping_size, sizeof(*stream_mapping));
+  if (!stream_mapping) {
+      ret = AVERROR(ENOMEM);
+      return;
+  }
+
+  ofmt = ofmt_ctx->oformat;
+
+const AVCodec * dec = NULL;
+AVCodecContext * dec_ctx = NULL;
 
 
-    // startThreadPool();
-            int64_t frame_number = 0; // The current frame number
+  for (i = 0; i < ifmt_ctx->nb_streams; i++) {
+      AVStream *out_stream;
+      AVStream *in_stream = ifmt_ctx->streams[i];
+      AVCodecParameters *in_codecpar = in_stream->codecpar;
 
-    while (1) {
-        AVStream *in_stream, *out_stream;
+      if (in_codecpar->codec_type != AVMEDIA_TYPE_AUDIO &&
+          in_codecpar->codec_type != AVMEDIA_TYPE_VIDEO &&
+          in_codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE) {
+          stream_mapping[i] = -1;
+          continue;
+      }
 
-        ret = av_read_frame(ifmt_ctx, pkt);
-        if (ret < 0)
-            break;
-        // log_packet(ifmt_ctx, pkt, "in");
-        in_stream  = ifmt_ctx->streams[pkt->stream_index];
-        if (pkt->stream_index >= m_nb_streams ) {
-            av_packet_unref(pkt);
-            continue;
+      if (in_codecpar->codec_type == AVMEDIA_TYPE_VIDEO){
+        video_index = i;
+        /* find decoder for the stream */
+        dec = avcodec_find_decoder(in_codecpar->codec_id);
+        if (!dec) {
+            fprintf(stderr, "Failed to find codec\n");
+            return;
         }
-        if (pkt->dts < last_dts[pkt->stream_index]) {
-            av_packet_unref(pkt);
-            continue;
+          /* Allocate a codec context for the decoder */
+        dec_ctx = avcodec_alloc_context3(dec);
+        if (!dec_ctx) {
+            fprintf(stderr, "Failed to allocate the codec context\n");
+            return;
         }
-        // cout << "stream_index:" << pkt->stream_index << " dts:" << pkt->dts << " last_dts:" << last_dts[pkt->stream_index] << endl;
-        last_dts[pkt->stream_index] = pkt->dts;
+
+        /* Copy codec parameters from input stream to output codec context */
+        if ((ret = avcodec_parameters_to_context(dec_ctx, in_codecpar)) < 0) {
+            fprintf(stderr, "Failed to copy codec parameters to decoder context\n");
+            return;
+        }
+
+                /* Init the decoders */
+        if ((ret = avcodec_open2(dec_ctx, dec, NULL)) < 0) {
+          fprintf(stderr, "Failed to open codec\n");
+          return;
+        }
+      }
+
+      stream_mapping[i] = stream_index++;
+
+      out_stream = avformat_new_stream(ofmt_ctx, NULL);
+      if (!out_stream) {
+          fprintf(stderr, "Failed allocating output stream\n");
+          ret = AVERROR_UNKNOWN;
+          return;
+      }
+
+      ret = avcodec_parameters_copy(out_stream->codecpar, in_codecpar);
+      if (ret < 0) {
+          fprintf(stderr, "Failed to copy codec parameters\n");
+          return;
+      }
+      out_stream->codecpar->codec_tag = 0;
+  }
+  av_dump_format(ofmt_ctx, 0, out_filename, 1);
+
+  if (!(ofmt->flags & AVFMT_NOFILE)) {
+      ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
+      if (ret < 0) {
+          fprintf(stderr, "Could not open output file '%s'", out_filename);
+          return;
+      }
+  }
+
+  ret = avformat_write_header(ofmt_ctx, NULL);
+  if (ret < 0) {
+      fprintf(stderr, "Error occurred when opening output file\n");
+      return;
+  }
+  int idx = 0;
+  int64_t pts_start_0 = 0, pts_start_1 = 0;
+  while (1) {
+      AVStream *in_stream, *out_stream;
+
+      ret = av_read_frame(ifmt_ctx, pkt);
+      if (ret < 0)
+          break;
+
+      in_stream  = ifmt_ctx->streams[pkt->stream_index];
+      if (pkt->stream_index >= stream_mapping_size ||
+          stream_mapping[pkt->stream_index] < 0) {
+          av_packet_unref(pkt);
+          continue;
+      }
+
+      if(pkt->stream_index == video_index)
+        decode_packet(dec_ctx, pkt);
 
 
-        out_stream = ofmt_ctx->streams[pkt->stream_index];
-        // log_packet(ifmt_ctx, pkt, "in");
 
-        /* copy packet */
-        // cout << "in_stream:" << in_stream->time_base.den <<" : "<< in_stream->time_base.num << endl;
-        // cout << "out_stream:" << out_stream->time_base.den << " : "<<  out_stream->time_base.num << endl;
-        av_packet_rescale_ts(pkt, in_stream->time_base, out_stream->time_base);
-        pkt->pos = -1;
-        // // log_packet(ofmt_ctx, pkt, "out");
-        
-        // if(pkt->stream_index == m_video_stream_index){
-        //     // Send the packet to the decoder
-        //     if (avcodec_send_packet(m_codecs[pkt->stream_index].m_dec_ctxs, pkt) < 0) {
-        //         fprintf(stderr, "Error sending packet to decoder\n");
-        //         // Handle error
-        //     }
+      idx++;
+      if(idx < 1000) {
+          av_packet_unref(pkt);
+          continue;
+      }
 
-        //     // Receive the decoded frame from the decoder
-        //     AVFrame* frame = av_frame_alloc();
-        //     if (avcodec_receive_frame(m_codecs[pkt->stream_index].m_dec_ctxs, frame) < 0) {
-        //         fprintf(stderr, "Error receiving frame from decoder\n");
-        //         // Handle error
-        //     }
-        //     if(frame->height > 0 && frame->width > 0){
-        //         cv::Mat img = avframe2mat(frame);
-        //         g_queue.Push(img);
+      pkt->stream_index = stream_mapping[pkt->stream_index];
+      out_stream = ofmt_ctx->streams[pkt->stream_index];
+      log_packet(ifmt_ctx, pkt, "in");
 
-        //     }else{
-        //         cout << "frame->height:" << frame->height << " frame->width:" << frame->width << endl;
-        //     }
-        //     av_frame_free(&frame);
-        // }
+      /* copy packet */
+      av_packet_rescale_ts(pkt, in_stream->time_base, out_stream->time_base);
+      if (pkt->stream_index == 0)
+          {
+              pkt->pts = pts_start_0;
+              pkt->dts = pts_start_0;
+              pts_start_0 += pkt->duration;
+          }else if(pkt->stream_index == 1)
+          {
+              pkt->pts = pts_start_1;
+              pkt->dts = pts_start_1;
+              pts_start_1 += pkt->duration;
+          }
+      pkt->pos = -1;
+      log_packet(ofmt_ctx, pkt, "out");
 
-        // TODO: check if we need to save the frame
-        // if (g_frame_count > 0) {
-        //     g_frame_count--;
-        
-        // Assuming you have these values available
+      ret = av_interleaved_write_frame(ofmt_ctx, pkt);
+      /* pkt is now blank (av_interleaved_write_frame() takes ownership of
+        * its contents and resets pkt), so that no unreferencing is necessary.
+        * This would be different if one used av_write_frame(). */
+      if (ret < 0) {
+          fprintf(stderr, "Error muxing packet\n");
+          break;
+      }
+  }
 
+  av_write_trailer(ofmt_ctx);
+end:
+  av_packet_free(&pkt);
 
-            // Calculate the PTS and DTS
-            int frame_rate = av_q2d(in_stream->avg_frame_rate);
-            pkt->pts = av_rescale_q(frame_number, (AVRational){1, frame_rate}, out_stream->time_base);
-            pkt->dts = pkt->pts; // In many cases, DTS and PTS will be the same
+  avformat_close_input(&ifmt_ctx);
 
-            frame_number++;
+  /* close output */
+  if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
+      avio_closep(&ofmt_ctx->pb);
+  avformat_free_context(ofmt_ctx);
 
-            ret = av_interleaved_write_frame(ofmt_ctx, pkt);
-            /* pkt is now blank (av_interleaved_write_frame() takes ownership of
-            * its contents and resets pkt), so that no unreferencing is necessary.
-            * This would be different if one used av_write_frame(). */
-            if (ret < 0) {
-                fprintf(stderr, "Error muxing packet\n");
-                break;
-            }
-        // }
+  av_freep(&stream_mapping);
 
-        av_packet_unref(pkt);
-    }
+  if (ret < 0 && ret != AVERROR_EOF) {
+      fprintf(stderr, "Error occurred: %s\n", err2str(ret).c_str());
+      return;
+  }
 
-    av_write_trailer(ofmt_ctx);
-
-    g_queue.Quit();
+  return;
 }
