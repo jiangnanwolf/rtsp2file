@@ -107,7 +107,7 @@ bool detectMovement(cv::Mat &curr_frame)
   return movement_detected;
 }
 
-static int decode_packet(AVCodecContext *dec, const AVPacket *pkt)
+bool decode_packet(AVCodecContext *dec, const AVPacket *pkt)
 {
   int ret = 0;
   AVFrame *frame = av_frame_alloc();
@@ -117,9 +117,9 @@ static int decode_packet(AVCodecContext *dec, const AVPacket *pkt)
   if (ret < 0)
   {
     fprintf(stderr, "Error submitting a packet for decoding (%s)\n", err2str(ret).c_str());
-    return ret;
+    return false;
   }
-
+  bool movement_detected = false;
   // get all the available frames from the decoder
   while (ret >= 0)
   {
@@ -129,10 +129,10 @@ static int decode_packet(AVCodecContext *dec, const AVPacket *pkt)
       // those two return values are special and mean there is no output
       // frame available, but there were no errors during decoding
       if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
-        return 0;
+        return movement_detected;
 
       fprintf(stderr, "Error during decoding (%s)\n", err2str(ret).c_str());
-      return ret;
+      return false;
     }
 
     // write the frame data to output file
@@ -146,19 +146,23 @@ static int decode_packet(AVCodecContext *dec, const AVPacket *pkt)
       cv::resize(image, resizedImg, cv::Size(320, 200));
       cv::imshow("mov", resizedImg);
       cv::waitKey(1);
-      detectMovement(resizedImg);
+      movement_detected = detectMovement(resizedImg);
+      if(movement_detected)
+      {
+        cout <<"Movement detected" << endl;
+      } 
     }
     else
       ret = 1; // output_audio_frame(frame);
 
     av_frame_unref(frame);
     if (ret < 0)
-      return ret;
+      return false;
   }
 
   av_frame_free(&frame);
 
-  return 0;
+  return movement_detected;
 }
 
 void Rtsp2File::run()
@@ -303,6 +307,7 @@ void Rtsp2File::run()
   }
   int idx = 0;
   int64_t pts_start_0 = 0, pts_start_1 = 0;
+  int count = 0;
   while (1)
   {
     AVStream *in_stream, *out_stream;
@@ -318,16 +323,24 @@ void Rtsp2File::run()
       av_packet_unref(pkt);
       continue;
     }
-
+    bool save = false;
     if (pkt->stream_index == video_index)
-      decode_packet(dec_ctx, pkt);
-
-    idx++;
-    if (idx < 1000)
-    {
+      save = decode_packet(dec_ctx, pkt);
+    if (save ){
+      count = 150;
+    }
+    if (count < 0) {
       av_packet_unref(pkt);
       continue;
     }
+
+    count--;
+    // idx++;
+    // if (idx < 1000)
+    // {
+    //   av_packet_unref(pkt);
+    //   continue;
+    // }
 
     pkt->stream_index = stream_mapping[pkt->stream_index];
     out_stream = ofmt_ctx->streams[pkt->stream_index];
@@ -360,7 +373,6 @@ void Rtsp2File::run()
       break;
     }
   }
-
   av_write_trailer(ofmt_ctx);
 end:
   av_packet_free(&pkt);
