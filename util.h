@@ -16,13 +16,17 @@ AVFrame *cvmatToAvframe(cv::Mat *image, AVFrame *frame);
 
 class AVFrame2Mat
 {
-    int m_width;
-    int m_height;
-    SwsContext *m_swsCtx;
+  int m_width;
+  int m_height;
+  SwsContext *m_swsCtx;
+
 public:
-    AVFrame2Mat();
-    ~AVFrame2Mat();
-    cv::Mat operator()(const AVFrame *frame);
+
+  AVFrame2Mat();
+  ~AVFrame2Mat();
+
+  void init(int width, int height, AVPixelFormat format);
+  cv::Mat convert(const AVFrame *frame);
 };
 
 #endif

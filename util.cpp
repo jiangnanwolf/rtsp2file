@@ -9,22 +9,21 @@ AVFrame2Mat::~AVFrame2Mat()
   sws_freeContext(m_swsCtx);
 }
 
-cv::Mat AVFrame2Mat::operator()(const AVFrame *frame)
+void AVFrame2Mat::init(int width, int height, AVPixelFormat format)
 {
-  int width = frame->width;
-  int height = frame->height;
-  cv::Mat image(height, width, CV_8UC3);
+  m_width = width;
+  m_height = height;
+  m_swsCtx = sws_getContext(
+      width, height, format, width, height, AVPixelFormat::AV_PIX_FMT_BGR24,
+      SWS_FAST_BILINEAR, NULL, NULL, NULL);
+}
+
+cv::Mat AVFrame2Mat::convert(const AVFrame *frame)
+{
+  cv::Mat image(m_height, m_width, CV_8UC3);
   int cvLinesizes[1];
   cvLinesizes[0] = image.step1();
-  if ( width != m_width || height != m_height || !m_swsCtx ) {
-    m_width = width;
-    m_height = height;
-    sws_freeContext(m_swsCtx);
-    m_swsCtx = sws_getContext(
-        width, height, (AVPixelFormat)frame->format, width, height,
-        AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-  }
-  sws_scale(m_swsCtx, frame->data, frame->linesize, 0, height, &image.data,
+  sws_scale(m_swsCtx, frame->data, frame->linesize, 0, m_height, &image.data,
             cvLinesizes);
   return image;
 }
