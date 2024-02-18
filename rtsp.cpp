@@ -77,8 +77,12 @@ void Rtsp2File::init()
     fprintf(stderr, "Could not allocate AVPacket\n");
     return;
   }
+  AVDictionary* options = NULL;
 
-  if (avformat_open_input(&ifmt_ctx, in_filename, 0, 0) < 0)
+  // Set the rtsp_transport option to tcp
+  av_dict_set(&options, "rtsp_transport", "tcp", 0);
+
+  if (avformat_open_input(&ifmt_ctx, in_filename, 0, &options) < 0)
   {
     fprintf(stderr, "Could not open input file '%s'", in_filename);
     return;
